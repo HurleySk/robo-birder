@@ -32,13 +32,13 @@ def generate_and_send_summary(
     include_hourly = summary_config.get("include_hourly_breakdown", False)
     include_daily = summary_config.get("include_daily_breakdown", False)
 
-    db_path = config["birdnet"]["db_path"]
+    db_config = config["birdnet"]
 
     logger.info(f"Generating {summary_name} summary (lookback: {lookback_minutes} min)")
 
     # Get summary data
     total_detections, species_summaries = get_summary_for_period(
-        db_path, lookback_minutes
+        db_config, lookback_minutes
     )
 
     # Get breakdowns if requested
@@ -46,10 +46,10 @@ def generate_and_send_summary(
     daily_breakdown = None
 
     if include_hourly:
-        hourly_breakdown = get_hourly_breakdown(db_path, lookback_minutes)
+        hourly_breakdown = get_hourly_breakdown(db_config, lookback_minutes)
 
     if include_daily:
-        daily_breakdown = get_daily_breakdown(db_path, lookback_minutes)
+        daily_breakdown = get_daily_breakdown(db_config, lookback_minutes)
 
     # Get webhook URL (allow per-summary override)
     webhook_url = get_webhook_url(config, summary_config.get("webhook_url"))

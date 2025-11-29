@@ -14,6 +14,8 @@ from .database import (
     get_bird_image_url,
     get_detection_by_id,
     get_latest_detection,
+    get_species_count,
+    get_species_count_since,
     species_exists_in_db,
     species_seen_since,
     species_seen_this_year,
@@ -92,14 +94,14 @@ def set_cooldown(species: str) -> None:
 
 
 def check_new_species(
-    detection: Detection, config: dict[str, Any], db_path: str
+    detection: Detection, config: dict[str, Any], db_config: dict[str, Any]
 ) -> tuple[bool, str | None]:
     """Check if a detection qualifies as a new species.
 
     Args:
         detection: Detection record.
         config: Configuration dictionary.
-        db_path: Path to database.
+        db_config: Database configuration dict.
 
     Returns:
         Tuple of (is_new, reason_string).
@@ -119,16 +121,7 @@ def check_new_species(
     # Check first ever (need to check if this is the ONLY occurrence)
     # Since the detection is already in the DB, we check for more than 1 occurrence
     if notify_on.get("first_ever", False):
-        # Query for count of this species
-        from .database import get_connection
-
-        with get_connection(db_path) as conn:
-            cursor = conn.execute(
-                "SELECT COUNT(*) FROM notes WHERE scientific_name = ?",
-                (scientific_name,),
-            )
-            count = cursor.fetchone()[0]
-
+        count = get_species_count(db_config, scientific_name)
         if count == 1:  # This detection is the only one
             return True, "First ever sighting!"
 
@@ -136,20 +129,7 @@ def check_new_species(
     if notify_on.get("first_of_year", False):
         year_start = datetime(datetime.now().year, 1, 1)
         # Check if there are other detections this year before this one
-        from .database import get_connection
-
-        with get_connection(db_path) as conn:
-            cursor = conn.execute(
-                """
-                SELECT COUNT(*) FROM notes
-                WHERE scientific_name = ?
-                AND begin_time >= ?
-                AND id < ?
-                """,
-                (scientific_name, year_start.isoformat(), detection.id),
-            )
-            count = cursor.fetchone()[0]
-
+        count = get_species_count_since(db_config, scientific_name, year_start, detection.id)
         if count == 0:
             return True, f"First sighting of {datetime.now().year}!"
 
@@ -163,21 +143,7 @@ def check_new_species(
             year -= 1
 
         season_start = get_season_start_date(config, current_season, year)
-
-        from .database import get_connection
-
-        with get_connection(db_path) as conn:
-            cursor = conn.execute(
-                """
-                SELECT COUNT(*) FROM notes
-                WHERE scientific_name = ?
-                AND begin_time >= ?
-                AND id < ?
-                """,
-                (scientific_name, season_start.isoformat(), detection.id),
-            )
-            count = cursor.fetchone()[0]
-
+        count = get_species_count_since(db_config, scientific_name, season_start, detection.id)
         if count == 0:
             season_name = current_season.capitalize()
             return True, f"First sighting of {season_name}!"
@@ -239,16 +205,16 @@ def handle_detection(detection: Detection, config: dict[str, Any]) -> bool:
     Returns:
         True if any notification was sent.
     """
-    db_path = config["birdnet"]["db_path"]
-    birdnet_base_url = config["birdnet"].get("base_url", "http://localhost:8080")
+    db_config = config["birdnet"]
+    birdnet_base_url = db_config.get("base_url", "http://localhost:8080")
 
     # Get bird image
-    image_url = get_bird_image_url(db_path, detection.scientific_name)
+    image_url = get_bird_image_url(db_config, detection.scientific_name)
 
     notification_sent = False
 
     # Check for new species first (higher priority)
-    is_new, reason = check_new_species(detection, config, db_path)
+    is_new, reason = check_new_species(detection, config, db_config)
 
     if is_new:
         new_species_config = config.get("new_species", {})
@@ -291,8 +257,8 @@ def handle_detection_by_id(detection_id: int, config: dict[str, Any]) -> bool:
     Returns:
         True if notification was sent.
     """
-    db_path = config["birdnet"]["db_path"]
-    detection = get_detection_by_id(db_path, detection_id)
+    db_config = config["birdnet"]
+    detection = get_detection_by_id(db_config, detection_id)
 
     if detection is None:
         logger.error(f"Detection not found: {detection_id}")
@@ -310,8 +276,8 @@ def handle_latest_detection(config: dict[str, Any]) -> bool:
     Returns:
         True if notification was sent.
     """
-    db_path = config["birdnet"]["db_path"]
-    detection = get_latest_detection(db_path)
+    db_config = config["birdnet"]
+    detection = get_latest_detection(db_config)
 
     if detection is None:
         logger.warning("No detections found in database")

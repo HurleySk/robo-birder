@@ -12,7 +12,7 @@ Push bird detection notifications from [BirdNet Go](https://github.com/tphakala/
 ## Requirements
 
 - Python 3.10+
-- BirdNet Go instance with SQLite output enabled
+- BirdNet Go instance with SQLite or MySQL database
 - Discord webhook URL
 
 ## Installation
@@ -65,10 +65,40 @@ summaries:
     lookback_minutes: 60
     include_top_species: 5
 
-# BirdNet Go paths
+# BirdNet Go database configuration
 birdnet:
-  db_path: "/path/to/birdnet.db"
+  db_type: "sqlite"  # or "mysql"
+  db_path: "/path/to/birdnet.db"  # for SQLite
+  # mysql:  # for MySQL
+  #   host: "localhost"
+  #   port: 3306
+  #   database: "birdnet"
+  #   username: "birdnet"
+  #   password: "secret"
   base_url: "http://localhost:8080"
+```
+
+### Database Options
+
+Robo-Birder supports both SQLite and MySQL, matching BirdNet Go's database options:
+
+**SQLite** (default):
+```yaml
+birdnet:
+  db_type: "sqlite"
+  db_path: "/path/to/birdnet.db"
+```
+
+**MySQL**:
+```yaml
+birdnet:
+  db_type: "mysql"
+  mysql:
+    host: "localhost"
+    port: 3306
+    database: "birdnet"
+    username: "birdnet"
+    password: "your_password"
 ```
 
 ## Usage

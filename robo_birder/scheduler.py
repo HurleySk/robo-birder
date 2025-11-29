@@ -1,4 +1,4 @@
-"""Cron-based scheduler for summary reports."""
+"""Cron-based scheduler for summary reports and detection watcher."""
 
 import logging
 import signal
@@ -9,9 +9,60 @@ from typing import Any
 from croniter import croniter
 
 from .config import load_config
+from .database import get_detection_by_id, get_max_detection_id, get_new_detection_ids
+from .notify import handle_detection
 from .summary import generate_and_send_summary
 
 logger = logging.getLogger(__name__)
+
+
+class DetectionWatcher:
+    """Watches database for new detections and triggers notifications."""
+
+    def __init__(self, config: dict[str, Any]):
+        """Initialize the watcher.
+
+        Args:
+            config: Configuration dictionary.
+        """
+        self.config = config
+        self.db_config = config["birdnet"]
+        self.last_id = self._get_max_id()
+        logger.info(f"DetectionWatcher initialized, starting from ID {self.last_id}")
+
+    def _get_max_id(self) -> int:
+        """Get the current maximum detection ID from database."""
+        try:
+            return get_max_detection_id(self.db_config)
+        except Exception as e:
+            logger.error(f"Failed to get max ID: {e}")
+            return 0
+
+    def check_new_detections(self) -> int:
+        """Check for new detections and process them.
+
+        Returns:
+            Number of new detections processed.
+        """
+        try:
+            new_ids = get_new_detection_ids(self.db_config, self.last_id)
+        except Exception as e:
+            logger.error(f"Failed to check for new detections: {e}")
+            return 0
+
+        processed = 0
+        for detection_id in new_ids:
+            detection = get_detection_by_id(self.db_config, detection_id)
+            if detection:
+                logger.info(f"New detection: {detection.common_name} (ID {detection_id})")
+                try:
+                    handle_detection(detection, self.config)
+                    processed += 1
+                except Exception as e:
+                    logger.exception(f"Error handling detection {detection_id}: {e}")
+            self.last_id = detection_id
+
+        return processed
 
 
 class SummaryScheduler:
@@ -31,6 +82,9 @@ class SummaryScheduler:
         # Track next run times for each summary
         self.next_runs: dict[str, datetime] = {}
         self._initialize_schedules()
+
+        # Detection watcher for real-time notifications
+        self.watcher = DetectionWatcher(self.config)
 
     def _initialize_schedules(self) -> None:
         """Initialize next run times for all enabled summaries."""
@@ -61,6 +115,8 @@ class SummaryScheduler:
         try:
             self.config = load_config(self.config_path)
             self._initialize_schedules()
+            self.watcher.config = self.config
+            self.watcher.db_config = self.config["birdnet"]
             logger.info("Configuration reloaded successfully")
         except Exception as e:
             logger.error(f"Failed to reload configuration: {e}")
@@ -133,6 +189,9 @@ class SummaryScheduler:
                 if now >= next_run:
                     logger.info(f"Running scheduled summary: {name}")
                     self._run_summary(name)
+
+            # Check for new detections
+            self.watcher.check_new_detections()
 
             # Sleep for a short interval
             time.sleep(10)

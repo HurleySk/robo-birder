@@ -52,7 +52,20 @@ summaries:
 
 # BirdNet Go configuration
 birdnet:
+  # Database type: "sqlite" or "mysql"
+  db_type: "sqlite"
+
+  # SQLite settings (used when db_type: sqlite)
   db_path: "/root/birdnet-go-app/data/birdnet.db"
+
+  # MySQL settings (used when db_type: mysql)
+  mysql:
+    host: "localhost"
+    port: 3306
+    database: "birdnet"
+    username: "birdnet"
+    password: "secret"
+
   clips_path: "/root/birdnet-go-app/data/clips"
   base_url: "http://localhost:8080"  # For linking to BirdNet Go web UI
 
