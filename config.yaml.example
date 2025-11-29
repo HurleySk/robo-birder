@@ -1,0 +1,72 @@
+# Robo-Birder Configuration
+# Copy this file to config.yaml and edit with your settings
+
+discord:
+  # Discord webhook URL - REQUIRED
+  # Create a webhook in your Discord server: Server Settings > Integrations > Webhooks
+  webhook_url: "https://discord.com/api/webhooks/YOUR_WEBHOOK_ID/YOUR_WEBHOOK_TOKEN"
+
+# Real-time detection notifications (every bird detection)
+realtime:
+  enabled: false  # Set to true to get notifications for every detection
+  min_confidence: 0.7  # Only notify for detections above this threshold (0.0-1.0)
+  cooldown_minutes: 5  # Suppress repeat notifications for same species within this window
+  species_whitelist: []  # Empty = all species; or list specific ones: ["Northern Cardinal", "Blue Jay"]
+  species_blacklist: []  # Exclude specific species from notifications
+
+# NEW SPECIES alerts - instant notifications for first-time sightings
+new_species:
+  enabled: true  # Dedicated instant alerts for NEW species only
+  min_confidence: 0.5  # Lower threshold acceptable for rare/new species
+  webhook_url: null  # Optional: separate webhook URL for new species alerts (null = use default)
+  notify_on:
+    first_ever: true  # Species never seen before at this location
+    first_of_year: true  # First sighting this calendar year
+    first_of_season: false  # First sighting this season (spring/summer/fall/winter)
+
+# Scheduled summary reports
+# You can define as many summaries as you want with different schedules and lookback periods
+summaries:
+  - name: "hourly"
+    enabled: false  # Set to true to enable hourly summaries
+    cron: "0 * * * *"  # Every hour on the hour
+    lookback_minutes: 60  # Summarize last 60 minutes
+    include_top_species: 5
+    webhook_url: null  # null = use default webhook, or specify different URL
+
+  - name: "daily"
+    enabled: true
+    cron: "0 20 * * *"  # 8 PM daily
+    lookback_minutes: 1440  # 24 hours
+    include_top_species: 10
+    include_hourly_breakdown: true
+    webhook_url: null
+
+  - name: "weekly"
+    enabled: false
+    cron: "0 9 * * 0"  # 9 AM every Sunday
+    lookback_minutes: 10080  # 7 days
+    include_top_species: 15
+    include_daily_breakdown: true
+    webhook_url: null
+
+# BirdNet Go configuration
+birdnet:
+  db_path: "/root/birdnet-go-app/data/birdnet.db"
+  clips_path: "/root/birdnet-go-app/data/clips"
+  base_url: "http://localhost:8080"  # For linking to BirdNet Go web UI
+
+# Season definitions (for first_of_season tracking)
+seasons:
+  spring:
+    start_month: 3
+    start_day: 20
+  summer:
+    start_month: 6
+    start_day: 21
+  fall:
+    start_month: 9
+    start_day: 22
+  winter:
+    start_month: 12
+    start_day: 21
