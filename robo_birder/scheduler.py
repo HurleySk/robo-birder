@@ -89,6 +89,7 @@ class SummaryScheduler:
     def _initialize_schedules(self) -> None:
         """Initialize next run times for all enabled summaries."""
         self.next_runs = {}
+        self._missed_summaries: list[str] = []
         summaries = self.config.get("summaries", [])
         now = datetime.now()
 
@@ -98,6 +99,7 @@ class SummaryScheduler:
 
             name = summary.get("name", "unnamed")
             cron_expr = summary.get("cron", "0 8 * * *")
+            lookback_minutes = summary.get("lookback_minutes", 60)
 
             try:
                 cron = croniter(cron_expr, now)
@@ -106,6 +108,19 @@ class SummaryScheduler:
                 logger.info(
                     f"Scheduled '{name}' (cron: {cron_expr}) - next run: {next_run}"
                 )
+
+                # Check if we missed a scheduled run within the lookback window
+                cron_prev = croniter(cron_expr, now)
+                prev_run = cron_prev.get_prev(datetime)
+                minutes_since_prev = (now - prev_run).total_seconds() / 60
+
+                if minutes_since_prev <= lookback_minutes:
+                    logger.info(
+                        f"Detected missed run for '{name}' at {prev_run} "
+                        f"({minutes_since_prev:.1f} minutes ago, within {lookback_minutes} min window)"
+                    )
+                    self._missed_summaries.append(name)
+
             except (ValueError, KeyError) as e:
                 logger.error(f"Invalid cron expression for '{name}': {cron_expr} - {e}")
 
@@ -175,6 +190,14 @@ class SummaryScheduler:
         signal.signal(signal.SIGHUP, self._handle_sighup)
 
         logger.info("Scheduler started")
+
+        # Run any missed summaries on startup
+        if self._missed_summaries:
+            logger.info(f"Running {len(self._missed_summaries)} missed summary(ies) on startup...")
+            for name in self._missed_summaries:
+                logger.info(f"Running missed summary: {name}")
+                self._run_summary(name)
+            self._missed_summaries.clear()
 
         while self.running:
             # Check for config reload request
