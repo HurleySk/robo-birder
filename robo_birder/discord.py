@@ -92,7 +92,7 @@ def send_new_species_alert(
         embed["thumbnail"] = {"url": image_url}
 
     # Add link to BirdNet Go (specific detection)
-    embed["url"] = f"{birdnet_base_url}/detections?id={detection.id}"
+    embed["url"] = f"{birdnet_base_url}/ui/detections/{detection.id}"
 
     payload = {"embeds": [embed]}
 
@@ -139,7 +139,7 @@ def send_detection_alert(
         ],
         "footer": {"text": "Robo-Birder"},
         "timestamp": detection.begin_time.isoformat(),
-        "url": f"{birdnet_base_url}/detections?id={detection.id}",
+        "url": f"{birdnet_base_url}/ui/detections/{detection.id}",
     }
 
     if image_url:
