@@ -5,12 +5,14 @@ import signal
 import time
 from datetime import datetime
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from croniter import croniter
 
 from .config import load_config
 from .database import get_detection_by_id, get_max_detection_id, get_new_detection_ids
 from .notify import handle_detection
+from .state import get_last_sent, record_summary_sent
 from .summary import generate_and_send_summary
 
 logger = logging.getLogger(__name__)
@@ -79,6 +81,11 @@ class SummaryScheduler:
         self.running = False
         self._reload_requested = False
 
+        # Load timezone from config
+        tz_name = self.config.get("general", {}).get("timezone", "UTC")
+        self.tz = ZoneInfo(tz_name)
+        logger.info(f"Using timezone: {tz_name}")
+
         # Track next run times for each summary
         self.next_runs: dict[str, datetime] = {}
         self._initialize_schedules()
@@ -91,7 +98,7 @@ class SummaryScheduler:
         self.next_runs = {}
         self._missed_summaries: list[str] = []
         summaries = self.config.get("summaries", [])
-        now = datetime.now()
+        now = datetime.now(self.tz)
 
         for summary in summaries:
             if not summary.get("enabled", False):
@@ -114,12 +121,21 @@ class SummaryScheduler:
                 prev_run = cron_prev.get_prev(datetime)
                 minutes_since_prev = (now - prev_run).total_seconds() / 60
 
+                # Only consider it missed if we haven't sent it since that scheduled time
+                last_sent = get_last_sent(name, self.config_path)
                 if minutes_since_prev <= lookback_minutes:
-                    logger.info(
-                        f"Detected missed run for '{name}' at {prev_run} "
-                        f"({minutes_since_prev:.1f} minutes ago, within {lookback_minutes} min window)"
-                    )
-                    self._missed_summaries.append(name)
+                    # Check if we already sent this summary after the scheduled time
+                    if last_sent is None or prev_run > last_sent:
+                        logger.info(
+                            f"Detected missed run for '{name}' at {prev_run} "
+                            f"(last sent: {last_sent or 'never'})"
+                        )
+                        self._missed_summaries.append(name)
+                    else:
+                        logger.debug(
+                            f"Summary '{name}' already sent at {last_sent}, "
+                            f"skipping catchup for {prev_run}"
+                        )
 
             except (ValueError, KeyError) as e:
                 logger.error(f"Invalid cron expression for '{name}': {cron_expr} - {e}")
@@ -129,6 +145,10 @@ class SummaryScheduler:
         logger.info("Reloading configuration...")
         try:
             self.config = load_config(self.config_path)
+            # Reload timezone
+            tz_name = self.config.get("general", {}).get("timezone", "UTC")
+            self.tz = ZoneInfo(tz_name)
+            logger.info(f"Using timezone: {tz_name}")
             self._initialize_schedules()
             self.watcher.config = self.config
             self.watcher.db_config = self.config["birdnet"]
@@ -167,14 +187,17 @@ class SummaryScheduler:
             return
 
         try:
-            generate_and_send_summary(summary_config, self.config)
+            success = generate_and_send_summary(summary_config, self.config)
+            if success:
+                # Record that we sent this summary
+                record_summary_sent(name, datetime.now(self.tz), self.config_path)
         except Exception as e:
             logger.exception(f"Error running summary '{name}': {e}")
 
         # Schedule next run
         cron_expr = summary_config.get("cron", "0 8 * * *")
         try:
-            cron = croniter(cron_expr, datetime.now())
+            cron = croniter(cron_expr, datetime.now(self.tz))
             self.next_runs[name] = cron.get_next(datetime)
             logger.debug(f"Next run for '{name}': {self.next_runs[name]}")
         except (ValueError, KeyError) as e:
@@ -205,7 +228,7 @@ class SummaryScheduler:
                 self.reload_config()
                 self._reload_requested = False
 
-            now = datetime.now()
+            now = datetime.now(self.tz)
 
             # Check each scheduled summary
             for name, next_run in list(self.next_runs.items()):

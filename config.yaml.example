@@ -1,6 +1,11 @@
 # Robo-Birder Configuration
 # Copy this file to config.yaml and edit with your settings
 
+general:
+  # Timezone for summary calculations and display (IANA timezone)
+  # Examples: "America/New_York", "America/Los_Angeles", "Europe/London", "UTC"
+  timezone: "UTC"
+
 discord:
   # Discord webhook URL - REQUIRED
   # Create a webhook in your Discord server: Server Settings > Integrations > Webhooks

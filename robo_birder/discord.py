@@ -3,6 +3,7 @@
 import logging
 from datetime import datetime
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import requests
 
@@ -68,7 +69,7 @@ def send_new_species_alert(
         time_str = detection.begin_time.strftime("%I:%M %p").lstrip("0")
 
     embed = {
-        "title": "NEW SPECIES DETECTED!",
+        "title": f"NEW SPECIES: {detection.common_name}",
         "color": COLOR_NEW_SPECIES,
         "fields": [
             {
@@ -90,8 +91,8 @@ def send_new_species_alert(
     if image_url:
         embed["thumbnail"] = {"url": image_url}
 
-    # Add link to BirdNet Go
-    embed["url"] = f"{birdnet_base_url}/detections"
+    # Add link to BirdNet Go (specific detection)
+    embed["url"] = f"{birdnet_base_url}/detections?id={detection.id}"
 
     payload = {"embeds": [embed]}
 
@@ -138,7 +139,7 @@ def send_detection_alert(
         ],
         "footer": {"text": "Robo-Birder"},
         "timestamp": detection.begin_time.isoformat(),
-        "url": f"{birdnet_base_url}/detections",
+        "url": f"{birdnet_base_url}/detections?id={detection.id}",
     }
 
     if image_url:
@@ -158,6 +159,7 @@ def send_summary(
     hourly_breakdown: dict[int, int] | None = None,
     daily_breakdown: dict[str, int] | None = None,
     lookback_minutes: int = 1440,
+    tz: ZoneInfo | None = None,
 ) -> bool:
     """Send a summary report to Discord.
 
@@ -170,23 +172,25 @@ def send_summary(
         hourly_breakdown: Optional hourly detection counts.
         daily_breakdown: Optional daily detection counts.
         lookback_minutes: Lookback period in minutes.
+        tz: Optional timezone for display formatting.
 
     Returns:
         True if successful.
     """
     unique_species = len(species_summaries)
+    now = datetime.now(tz) if tz else datetime.now()
 
     # Format title based on lookback period
     if lookback_minutes <= 60:
         title = f"Hourly Bird Report"
-        time_desc = datetime.now().strftime("%-I:00 %p")
+        time_desc = now.strftime("%-I:00 %p")
     elif lookback_minutes <= 1440:
         title = f"Daily Bird Report"
-        time_desc = datetime.now().strftime("%b %d, %Y")
+        time_desc = now.strftime("%b %d, %Y")
     else:
         days = lookback_minutes // 1440
         title = f"{days}-Day Bird Report"
-        time_desc = datetime.now().strftime("%b %d, %Y")
+        time_desc = now.strftime("%b %d, %Y")
 
     # Build species list
     top_species = species_summaries[:top_n]
@@ -231,7 +235,7 @@ def send_summary(
             },
         ],
         "footer": {"text": "Robo-Birder"},
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": now.isoformat(),
     }
 
     if species_text:

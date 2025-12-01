@@ -2,6 +2,7 @@
 
 import logging
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from .config import get_webhook_url
 from .database import (
@@ -34,11 +35,15 @@ def generate_and_send_summary(
 
     db_config = config["birdnet"]
 
-    logger.info(f"Generating {summary_name} summary (lookback: {lookback_minutes} min)")
+    # Get timezone from config
+    tz_name = config.get("general", {}).get("timezone", "UTC")
+    tz = ZoneInfo(tz_name)
+
+    logger.info(f"Generating {summary_name} summary (lookback: {lookback_minutes} min, tz: {tz_name})")
 
     # Get summary data
     total_detections, species_summaries = get_summary_for_period(
-        db_config, lookback_minutes
+        db_config, lookback_minutes, tz
     )
 
     # Get breakdowns if requested
@@ -46,10 +51,10 @@ def generate_and_send_summary(
     daily_breakdown = None
 
     if include_hourly:
-        hourly_breakdown = get_hourly_breakdown(db_config, lookback_minutes)
+        hourly_breakdown = get_hourly_breakdown(db_config, lookback_minutes, tz)
 
     if include_daily:
-        daily_breakdown = get_daily_breakdown(db_config, lookback_minutes)
+        daily_breakdown = get_daily_breakdown(db_config, lookback_minutes, tz)
 
     # Get webhook URL (allow per-summary override)
     webhook_url = get_webhook_url(config, summary_config.get("webhook_url"))
@@ -64,6 +69,7 @@ def generate_and_send_summary(
         hourly_breakdown=hourly_breakdown,
         daily_breakdown=daily_breakdown,
         lookback_minutes=lookback_minutes,
+        tz=tz,
     )
 
     if success:

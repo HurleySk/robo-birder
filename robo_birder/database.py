@@ -4,8 +4,9 @@ import sqlite3
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Generator
+from zoneinfo import ZoneInfo
 
 
 @dataclass
@@ -429,18 +430,20 @@ def get_detections_since(
 
 
 def get_summary_for_period(
-    db_config: dict[str, Any], lookback_minutes: int
+    db_config: dict[str, Any], lookback_minutes: int, tz: ZoneInfo | None = None
 ) -> tuple[int, list[SpeciesSummary]]:
     """Get detection summary for a time period.
 
     Args:
         db_config: Database configuration dict.
         lookback_minutes: Number of minutes to look back.
+        tz: Optional timezone for calculating the lookback period.
 
     Returns:
         Tuple of (total_detections, list of SpeciesSummary).
     """
-    since = datetime.now() - timedelta(minutes=lookback_minutes)
+    now = datetime.now(tz) if tz else datetime.now()
+    since = now - timedelta(minutes=lookback_minutes)
 
     with get_backend(db_config) as db:
         p = db.placeholder
@@ -492,18 +495,20 @@ def get_summary_for_period(
 
 
 def get_hourly_breakdown(
-    db_config: dict[str, Any], lookback_minutes: int
+    db_config: dict[str, Any], lookback_minutes: int, tz: ZoneInfo | None = None
 ) -> dict[int, int]:
     """Get detection counts by hour.
 
     Args:
         db_config: Database configuration dict.
         lookback_minutes: Number of minutes to look back.
+        tz: Optional timezone for calculating the lookback period.
 
     Returns:
         Dictionary mapping hour (0-23) to detection count.
     """
-    since = datetime.now() - timedelta(minutes=lookback_minutes)
+    now = datetime.now(tz) if tz else datetime.now()
+    since = now - timedelta(minutes=lookback_minutes)
 
     with get_backend(db_config) as db:
         p = db.placeholder
@@ -524,18 +529,20 @@ def get_hourly_breakdown(
 
 
 def get_daily_breakdown(
-    db_config: dict[str, Any], lookback_minutes: int
+    db_config: dict[str, Any], lookback_minutes: int, tz: ZoneInfo | None = None
 ) -> dict[str, int]:
     """Get detection counts by date.
 
     Args:
         db_config: Database configuration dict.
         lookback_minutes: Number of minutes to look back.
+        tz: Optional timezone for calculating the lookback period.
 
     Returns:
         Dictionary mapping date string to detection count.
     """
-    since = datetime.now() - timedelta(minutes=lookback_minutes)
+    now = datetime.now(tz) if tz else datetime.now()
+    since = now - timedelta(minutes=lookback_minutes)
 
     with get_backend(db_config) as db:
         p = db.placeholder

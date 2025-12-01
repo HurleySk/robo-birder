@@ -39,6 +39,9 @@ nano config.yaml  # Add your Discord webhook URL
 Edit `config.yaml`:
 
 ```yaml
+general:
+  timezone: "America/New_York"  # IANA timezone for summaries
+
 discord:
   webhook_url: "https://discord.com/api/webhooks/YOUR/WEBHOOK"
 
@@ -171,9 +174,9 @@ Restart BirdNet Go after making changes.
 ## Discord Message Examples
 
 ### New Species Alert
-A gold-colored embed appears when a species is detected for the first time:
+A gold-colored embed appears when a species is detected for the first time. Clicking the title links to the specific detection in BirdNet Go:
 
-> **NEW SPECIES DETECTED!**
+> **NEW SPECIES: Cedar Waxwing**
 >
 > **Cedar Waxwing**
 > *Bombycilla cedrorum*
