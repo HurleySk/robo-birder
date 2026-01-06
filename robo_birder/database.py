@@ -340,7 +340,7 @@ def species_seen_this_year(db_config: dict[str, Any], scientific_name: str) -> b
     Returns:
         True if species was seen this year.
     """
-    year_start = datetime(datetime.now().year, 1, 1).isoformat()
+    year_start = _format_datetime_for_query(datetime(datetime.now().year, 1, 1))
 
     with get_backend(db_config) as db:
         p = db.placeholder
@@ -376,7 +376,7 @@ def species_seen_since(db_config: dict[str, Any], scientific_name: str, since: d
             AND begin_time >= {p}
             LIMIT 1
             """,
-            (scientific_name, since.isoformat()),
+            (scientific_name, _format_datetime_for_query(since)),
         )
         return db.fetchone(cursor) is not None
 
@@ -407,7 +407,7 @@ def get_detections_since(
             WHERE begin_time >= {p} AND begin_time < {p}
             ORDER BY begin_time
             """,
-            (since.isoformat(), until.isoformat()),
+            (_format_datetime_for_query(since), _format_datetime_for_query(until)),
         )
 
         detections = []
@@ -455,7 +455,7 @@ def get_summary_for_period(
             FROM notes
             WHERE begin_time >= {p}
             """,
-            (since.isoformat(),),
+            (_format_datetime_for_query(since),),
         )
         row = db.fetchone(cursor)
         total = row["total"] if row else 0
@@ -472,7 +472,7 @@ def get_summary_for_period(
             GROUP BY scientific_name
             ORDER BY count DESC
             """,
-            (since.isoformat(),),
+            (_format_datetime_for_query(since),),
         )
 
         summaries = []
@@ -522,7 +522,7 @@ def get_hourly_breakdown(
             GROUP BY hour
             ORDER BY hour
             """,
-            (since.isoformat(),),
+            (_format_datetime_for_query(since),),
         )
 
         return {row["hour"]: row["count"] for row in db.fetchall(cursor)}
@@ -554,7 +554,7 @@ def get_daily_breakdown(
             GROUP BY date
             ORDER BY date
             """,
-            (since.isoformat(),),
+            (_format_datetime_for_query(since),),
         )
 
         return {row["date"]: row["count"] for row in db.fetchall(cursor)}
@@ -634,7 +634,7 @@ def get_species_count_since(
                 AND begin_time >= {p}
                 AND id < {p}
                 """,
-                (scientific_name, since.isoformat(), before_id),
+                (scientific_name, _format_datetime_for_query(since), before_id),
             )
         else:
             cursor = db.execute(
@@ -643,7 +643,7 @@ def get_species_count_since(
                 WHERE scientific_name = {p}
                 AND begin_time >= {p}
                 """,
-                (scientific_name, since.isoformat()),
+                (scientific_name, _format_datetime_for_query(since)),
             )
         row = db.fetchone(cursor)
         return row["count"] if row else 0
@@ -681,6 +681,22 @@ def get_new_detection_ids(db_config: dict[str, Any], after_id: int) -> list[int]
             (after_id,),
         )
         return [row["id"] for row in db.fetchall(cursor)]
+
+
+def _format_datetime_for_query(dt: datetime) -> str:
+    """Format datetime for SQL queries to match BirdNet-Go storage format.
+
+    BirdNet-Go stores datetimes with space separator (e.g., '2026-01-05 10:00:00'),
+    not ISO format with 'T' separator. Using isoformat() breaks string comparisons
+    because 'T' > ' ' lexicographically.
+
+    Args:
+        dt: Datetime to format.
+
+    Returns:
+        Formatted string matching BirdNet-Go's storage format.
+    """
+    return dt.strftime("%Y-%m-%d %H:%M:%S")
 
 
 def _parse_datetime(dt_str: str) -> datetime:

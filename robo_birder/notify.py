@@ -115,6 +115,11 @@ def check_new_species(
     if detection.confidence < min_confidence:
         return False, None
 
+    # Check cooldown to prevent duplicate alerts
+    cooldown_minutes = new_species_config.get("cooldown_minutes", 5)
+    if is_on_cooldown(detection.scientific_name, cooldown_minutes):
+        return False, None
+
     notify_on = new_species_config.get("notify_on", {})
     scientific_name = detection.scientific_name
 
