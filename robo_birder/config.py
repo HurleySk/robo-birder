@@ -121,3 +121,32 @@ def get_season_start_date(config: dict[str, Any], season: str, year: int) -> "da
     start_day = season_cfg.get("start_day", defaults[season][1])
 
     return datetime(year, start_month, start_day)
+
+
+def is_watchlist_enabled(config: dict[str, Any]) -> bool:
+    """Check if watchlist notifications are enabled.
+
+    Args:
+        config: Configuration dictionary.
+
+    Returns:
+        True if watchlist is enabled and has species.
+    """
+    watchlist = config.get("watchlist", {})
+    return watchlist.get("enabled", False) and bool(watchlist.get("species", []))
+
+
+def get_watchlist_species(config: dict[str, Any]) -> set[str]:
+    """Get the set of watchlisted species names (lowercase for matching).
+
+    Args:
+        config: Configuration dictionary.
+
+    Returns:
+        Set of lowercase species names, or empty set if disabled.
+    """
+    if not is_watchlist_enabled(config):
+        return set()
+
+    species_list = config.get("watchlist", {}).get("species", [])
+    return {s.lower() for s in species_list}
