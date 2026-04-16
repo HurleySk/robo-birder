@@ -131,3 +131,63 @@ class TestHandleDetectionWatchlist:
 
         assert result is True
         mock_watchlist_alert.assert_called_once()
+
+
+class TestHandleDetectionEdgeCases:
+    @patch("robo_birder.notify.get_bird_image_url", return_value=None)
+    @patch("robo_birder.notify.send_watchlist_alert", return_value=False)
+    @patch("robo_birder.notify.check_new_species", return_value=(False, None))
+    def test_watchlist_alert_failure_returns_false_no_cooldown(
+        self, mock_new, mock_alert, mock_img, sample_detection, watchlist_config, tmp_path
+    ):
+        """Webhook failure returns False and does not set cooldown."""
+        cooldown_file = tmp_path / "cooldowns.json"
+        with patch("robo_birder.notify.COOLDOWN_FILE", cooldown_file):
+            result = handle_detection(sample_detection, watchlist_config)
+        assert result is False
+
+    @patch("robo_birder.notify.get_bird_image_url", return_value=None)
+    @patch("robo_birder.notify.send_watchlist_alert", return_value=False)
+    @patch("robo_birder.notify.send_new_species_alert", return_value=True)
+    @patch("robo_birder.notify.check_new_species", return_value=(True, "First ever sighting!"))
+    def test_watchlist_failure_falls_back_to_new_species_alert(
+        self, mock_new, mock_new_alert, mock_watchlist_alert, mock_img,
+        sample_detection, watchlist_config, tmp_path
+    ):
+        """If watchlist alert fails for a new species, falls back to new-species alert."""
+        cooldown_file = tmp_path / "cooldowns.json"
+        with patch("robo_birder.notify.COOLDOWN_FILE", cooldown_file):
+            result = handle_detection(sample_detection, watchlist_config)
+        assert result is True
+        mock_new_alert.assert_called_once()
+
+    @patch("robo_birder.notify.get_bird_image_url", return_value=None)
+    @patch("robo_birder.notify.send_detection_alert", return_value=True)
+    @patch("robo_birder.notify.check_new_species", return_value=(False, None))
+    def test_non_watchlisted_non_new_uses_realtime(
+        self, mock_new, mock_realtime_alert, mock_img,
+        sample_detection_unlisted, tmp_path
+    ):
+        """Non-watchlisted, non-new species with realtime enabled uses realtime path."""
+        config = {
+            "discord": {"webhook_url": "https://discord.com/api/webhooks/test/test"},
+            "birdnet": {
+                "db_type": "sqlite",
+                "db_path": ":memory:",
+                "base_url": "http://localhost:8080",
+            },
+            "watchlist": {"enabled": False, "species": []},
+            "new_species": {"enabled": False},
+            "realtime": {
+                "enabled": True,
+                "min_confidence": 0.5,
+                "cooldown_minutes": 5,
+                "species_whitelist": [],
+                "species_blacklist": [],
+            },
+        }
+        cooldown_file = tmp_path / "cooldowns.json"
+        with patch("robo_birder.notify.COOLDOWN_FILE", cooldown_file):
+            result = handle_detection(sample_detection_unlisted, config)
+        assert result is True
+        mock_realtime_alert.assert_called_once()

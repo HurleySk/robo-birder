@@ -149,4 +149,10 @@ def get_watchlist_species(config: dict[str, Any]) -> set[str]:
         return set()
 
     species_list = config.get("watchlist", {}).get("species", [])
+    if not isinstance(species_list, list):
+        import logging
+        logging.getLogger(__name__).warning(
+            "watchlist.species should be a list, got %s", type(species_list).__name__
+        )
+        return set()
     return {s.lower() for s in species_list}

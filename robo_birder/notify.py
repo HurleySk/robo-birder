@@ -250,7 +250,10 @@ def handle_detection(detection: Detection, config: dict[str, Any]) -> bool:
         cooldown_minutes = watchlist_config.get("cooldown_minutes", 60)
         watchlist_cooldown_key = f"watchlist:{detection.scientific_name}"
 
-        # New species bypasses watchlist cooldown
+        # New species bypasses watchlist cooldown.
+        # Note: when a watchlisted species is on cooldown, it also suppresses
+        # realtime notifications for that species. This is intentional — the
+        # user already received a watchlist alert recently.
         if not is_new and is_on_cooldown(watchlist_cooldown_key, cooldown_minutes):
             logger.debug(
                 f"Watchlist species {detection.common_name} on cooldown, skipping"
@@ -277,6 +280,23 @@ def handle_detection(detection: Detection, config: dict[str, Any]) -> bool:
                 if is_new:
                     set_cooldown(detection.scientific_name)
                 return True
+            elif is_new:
+                # Watchlist alert failed but this is a new species —
+                # fall back to the regular new-species alert path
+                logger.warning(
+                    "Watchlist alert failed for new species %s, "
+                    "falling back to new-species alert",
+                    detection.common_name,
+                )
+                new_species_config = config.get("new_species", {})
+                fallback_url = get_webhook_url(
+                    config, new_species_config.get("webhook_url")
+                )
+                if send_new_species_alert(
+                    fallback_url, detection, new_reason, image_url, birdnet_base_url
+                ):
+                    set_cooldown(detection.scientific_name)
+                    return True
 
     # Priority 3: New species (not watchlisted)
     elif is_new:

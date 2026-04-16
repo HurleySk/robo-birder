@@ -30,3 +30,16 @@ def test_is_watchlist_enabled_false(watchlist_config_disabled):
 def test_is_watchlist_enabled_missing_section():
     config = {"discord": {"webhook_url": "test"}}
     assert is_watchlist_enabled(config) is False
+
+
+def test_get_watchlist_species_string_instead_of_list():
+    """String species value (common YAML mistake) returns empty set."""
+    config = {
+        "watchlist": {
+            "enabled": True,
+            "species": "Pileated Woodpecker",  # string, not list
+        }
+    }
+    from robo_birder.config import get_watchlist_species
+    result = get_watchlist_species(config)
+    assert result == set()
