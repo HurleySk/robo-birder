@@ -20,7 +20,7 @@ from .database import (
     species_seen_since,
     species_seen_this_year,
 )
-from .discord import send_detection_alert, send_new_species_alert
+from .discord import send_detection_alert, send_new_species_alert, send_watchlist_alert
 
 logger = logging.getLogger(__name__)
 
@@ -156,6 +156,27 @@ def check_new_species(
     return False, None
 
 
+
+
+def check_watchlist(detection: Detection, config: dict[str, Any]) -> bool:
+    """Check if a detection is for a watchlisted species.
+
+    Args:
+        detection: Detection record.
+        config: Configuration dictionary.
+
+    Returns:
+        True if species is on the watchlist.
+    """
+    from .config import get_watchlist_species
+
+    watchlist = get_watchlist_species(config)
+    if not watchlist:
+        return False
+
+    return detection.common_name.lower() in watchlist
+
+
 def should_notify_realtime(
     detection: Detection, config: dict[str, Any]
 ) -> bool:
@@ -203,6 +224,12 @@ def should_notify_realtime(
 def handle_detection(detection: Detection, config: dict[str, Any]) -> bool:
     """Handle a new detection and send appropriate notifications.
 
+    Priority order:
+    1. Watchlisted + new species -> one watchlist-styled alert with new-species badge
+    2. Watchlisted only -> watchlist alert (subject to watchlist cooldown)
+    3. New species only -> existing new species alert
+    4. Realtime enabled -> existing detection alert
+
     Args:
         detection: Detection record.
         config: Configuration dictionary.
@@ -216,40 +243,65 @@ def handle_detection(detection: Detection, config: dict[str, Any]) -> bool:
     # Get bird image
     image_url = get_bird_image_url(db_config, detection.scientific_name)
 
-    notification_sent = False
+    # Check both conditions upfront
+    is_watchlisted = check_watchlist(detection, config)
+    is_new, new_reason = check_new_species(detection, config, db_config)
 
-    # Check for new species first (higher priority)
-    is_new, reason = check_new_species(detection, config, db_config)
+    # Priority 1 & 2: Watchlisted species
+    if is_watchlisted:
+        watchlist_config = config.get("watchlist", {})
+        webhook_url = get_webhook_url(config, watchlist_config.get("webhook_url"))
+        cooldown_minutes = watchlist_config.get("cooldown_minutes", 60)
+        watchlist_cooldown_key = f"watchlist:{detection.scientific_name}"
 
-    if is_new:
+        # New species bypasses watchlist cooldown
+        if not is_new and is_on_cooldown(watchlist_cooldown_key, cooldown_minutes):
+            logger.debug(
+                f"Watchlist species {detection.common_name} on cooldown, skipping"
+            )
+        else:
+            logger.info(
+                f"Watchlist species detected: {detection.common_name}"
+                + (f" - {new_reason}" if is_new else "")
+            )
+
+            if send_watchlist_alert(
+                webhook_url,
+                detection,
+                image_url=image_url,
+                birdnet_base_url=birdnet_base_url,
+                is_new_species=is_new,
+                new_reason=new_reason,
+            ):
+                set_cooldown(watchlist_cooldown_key)
+                if is_new:
+                    set_cooldown(detection.scientific_name)
+                return True
+
+    # Priority 3: New species (not watchlisted)
+    elif is_new:
         new_species_config = config.get("new_species", {})
-        webhook_url = get_webhook_url(
-            config, new_species_config.get("webhook_url")
-        )
+        webhook_url = get_webhook_url(config, new_species_config.get("webhook_url"))
 
-        logger.info(
-            f"New species detected: {detection.common_name} - {reason}"
-        )
+        logger.info(f"New species detected: {detection.common_name} - {new_reason}")
 
         if send_new_species_alert(
-            webhook_url, detection, reason, image_url, birdnet_base_url
+            webhook_url, detection, new_reason, image_url, birdnet_base_url
         ):
-            notification_sent = True
             set_cooldown(detection.scientific_name)
+            return True
 
-    # Check for realtime notification (only if not already notified as new species)
+    # Priority 4: Realtime notification
     elif should_notify_realtime(detection, config):
         webhook_url = get_webhook_url(config)
 
         logger.info(f"Detection alert: {detection.common_name}")
 
-        if send_detection_alert(
-            webhook_url, detection, image_url, birdnet_base_url
-        ):
-            notification_sent = True
+        if send_detection_alert(webhook_url, detection, image_url, birdnet_base_url):
             set_cooldown(detection.scientific_name)
+            return True
 
-    return notification_sent
+    return False
 
 
 def handle_detection_by_id(detection_id: int, config: dict[str, Any]) -> bool:
