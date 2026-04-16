@@ -16,6 +16,7 @@ COLOR_NEW_SPECIES = 0xFFD700  # Gold
 COLOR_DETECTION = 0x3498DB  # Blue
 COLOR_SUMMARY = 0x2ECC71  # Green
 COLOR_ERROR = 0xE74C3C  # Red
+COLOR_WATCHLIST = 0xFF8C00  # Orange/amber
 
 
 def send_webhook(webhook_url: str, payload: dict[str, Any]) -> bool:
@@ -272,6 +273,82 @@ def send_summary(
                 "inline": False,
             }
         ]
+
+    payload = {"embeds": [embed]}
+
+    return send_webhook(webhook_url, payload)
+
+
+
+def send_watchlist_alert(
+    webhook_url: str,
+    detection: Detection,
+    image_url: str | None = None,
+    birdnet_base_url: str = "http://localhost:8080",
+    is_new_species: bool = False,
+    new_reason: str | None = None,
+) -> bool:
+    """Send a watchlist species alert to Discord.
+
+    Args:
+        webhook_url: Discord webhook URL.
+        detection: Detection record.
+        image_url: Optional bird image URL.
+        birdnet_base_url: Base URL for BirdNet Go web UI.
+        is_new_species: Whether this is also a new species detection.
+        new_reason: Reason string if new species (e.g., "First ever sighting!").
+
+    Returns:
+        True if successful.
+    """
+    try:
+        time_str = detection.begin_time.strftime("%-I:%M %p")
+    except ValueError:
+        time_str = detection.begin_time.strftime("%I:%M %p").lstrip("0")
+
+    if is_new_species:
+        title = f"WATCHLIST + NEW: {detection.common_name}"
+    else:
+        title = f"WATCHLIST: {detection.common_name}"
+
+    fields = [
+        {
+            "name": detection.common_name,
+            "value": f"*{detection.scientific_name}*",
+            "inline": False,
+        },
+        {
+            "name": "Confidence",
+            "value": f"{detection.confidence:.0%}",
+            "inline": True,
+        },
+        {
+            "name": "Time",
+            "value": time_str,
+            "inline": True,
+        },
+    ]
+
+    if is_new_species and new_reason:
+        fields.append(
+            {
+                "name": "New Species",
+                "value": f"**{new_reason}**",
+                "inline": False,
+            }
+        )
+
+    embed = {
+        "title": title,
+        "color": COLOR_WATCHLIST,
+        "fields": fields,
+        "footer": {"text": "Robo-Birder | Watchlist"},
+        "timestamp": detection.begin_time.isoformat(),
+        "url": f"{birdnet_base_url}/ui/detections/{detection.id}",
+    }
+
+    if image_url:
+        embed["thumbnail"] = {"url": image_url}
 
     payload = {"embeds": [embed]}
 
