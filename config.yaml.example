@@ -29,6 +29,16 @@ new_species:
     first_of_year: true  # First sighting this calendar year
     first_of_season: false  # First sighting this season (spring/summer/fall/winter)
 
+
+# WATCHLIST - always-notify species regardless of other settings
+# When a watchlisted species is detected, you get an alert even if it has been seen before.
+# If it is also a new species (first ever, first of year, etc.), you get ONE combined alert.
+watchlist:
+  enabled: false  # Set to true to enable watchlist notifications
+  species: []  # List species by common name: ["Pileated Woodpecker", "Barred Owl"]
+  cooldown_minutes: 60  # Suppress repeat alerts for same species within this window
+  webhook_url: null  # Optional: separate webhook (null = use default)
+
 # Scheduled summary reports
 # You can define as many summaries as you want with different schedules and lookback periods
 summaries:
