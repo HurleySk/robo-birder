@@ -2,13 +2,12 @@
 
 import json
 import logging
-import os
 import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from .config import get_current_season, get_season_start_date, get_webhook_url
+from .config import get_current_season, get_season_start_date, get_watchlist_species, get_webhook_url
 from .database import (
     Detection,
     get_bird_image_url,
@@ -157,7 +156,6 @@ def check_new_species(
 
 
 
-
 def check_watchlist(detection: Detection, config: dict[str, Any]) -> bool:
     """Check if a detection is for a watchlisted species.
 
@@ -168,8 +166,6 @@ def check_watchlist(detection: Detection, config: dict[str, Any]) -> bool:
     Returns:
         True if species is on the watchlist.
     """
-    from .config import get_watchlist_species
-
     watchlist = get_watchlist_species(config)
     if not watchlist:
         return False
@@ -274,6 +270,10 @@ def handle_detection(detection: Detection, config: dict[str, Any]) -> bool:
                 new_reason=new_reason,
             ):
                 set_cooldown(watchlist_cooldown_key)
+                # Also set the new-species cooldown so check_new_species
+                # won't re-flag this species as "new" on the next detection.
+                # After this cooldown expires, subsequent watchlist hits show
+                # as watchlist-only (without the new-species badge).
                 if is_new:
                     set_cooldown(detection.scientific_name)
                 return True
