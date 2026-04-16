@@ -5,6 +5,7 @@ Push bird detection notifications from [BirdNet Go](https://github.com/tphakala/
 ## Features
 
 - **New Species Alerts**: Instant notifications when a never-before-seen species is detected (first ever, first of year, or first of season)
+- **Watchlist Notifications**: Always get notified when specific species are detected, regardless of other filters — with configurable cooldown to prevent spam
 - **Scheduled Summaries**: Configurable daily, hourly, weekly, or custom interval reports
 - **Bird Images**: Embeds include species photos from BirdNet Go's Wikimedia cache
 - **Fully Configurable**: YAML config with per-summary webhooks, confidence thresholds, species filters, and more
@@ -53,6 +54,13 @@ new_species:
     first_ever: true      # Never seen before
     first_of_year: true   # First of calendar year
     first_of_season: false
+
+
+# Watchlist - always get notified about specific species
+watchlist:
+  enabled: true
+  species: ["Pileated Woodpecker", "Barred Owl"]
+  cooldown_minutes: 60  # Suppress repeats within 1 hour
 
 # Scheduled summaries (add as many as you want)
 summaries:
@@ -103,6 +111,17 @@ birdnet:
     username: "birdnet"
     password: "your_password"
 ```
+
+
+### Watchlist
+
+The watchlist lets you always receive notifications for specific species, even if they have been seen before. This is useful for rare visitors or personal favorites.
+
+- Species are matched by common name (case-insensitive)
+- A configurable cooldown (default: 1 hour) prevents repeat alerts for the same species
+- If a watchlisted species is also a **new species** (first ever, first of year, etc.), you get **one combined alert** with both the watchlist styling and the new-species badge — no duplicates
+- New species detections bypass the watchlist cooldown (first sightings are always worth knowing about)
+- Watchlist alerts use a distinct orange embed style so they stand out in your Discord channel
 
 ## Usage
 
